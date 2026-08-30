@@ -2,6 +2,8 @@
 
 ![Acer Predator Helios Neo 16 keyboard backlight](./preview.png)
 
+[![Demo Video](https://img.youtube.com/vi/nR_2H0sh1xg/0.jpg)](https://youtube.com/shorts/nR_2H0sh1xg)
+
 An Omarchy plugin that keeps the **Acer Predator Helios Neo 16** keyboard backlight in sync with the active Omarchy theme. Every time you switch themes, the LEDs switch to the theme's **accent color** at **100% brightness** (configurable).
 
 ## How it works
