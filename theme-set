@@ -1,0 +1,102 @@
+#!/bin/bash
+# omarchy:summary=Apply the current Omarchy theme accent color to the Acer Predator RGB keyboard
+#
+# Reads the theme accent color (keyboard.rgb) that Omarchy writes on every theme
+# change and applies it as a static color at 100% brightness. Runs as a
+# theme-set.d hook, but can also be invoked directly.
+
+set -euo pipefail
+
+DYNAMIC_DEVICE="${PREDATOR_RGB_DYNAMIC_DEVICE:-/dev/acer-gkbbl-0}"
+STATIC_DEVICE="${PREDATOR_RGB_STATIC_DEVICE:-/dev/acer-gkbbl-static-0}"
+KEYBOARD_RGB_FILE="${PREDATOR_RGB_KEYBOARD_RGB_FILE:-$HOME/.local/state/omarchy/current/theme/keyboard.rgb}"
+BRIGHTNESS="${PREDATOR_RGB_BRIGHTNESS:-100}"
+STAGGER_DELAY="${PREDATOR_RGB_STAGGER_DELAY:-0.9}"
+ZONE_COUNT=4
+
+validate_device_path() {
+  local path=$1
+  [[ -n $path ]] || return 1
+  [[ $path != *..* ]] || return 1
+  [[ $path != *[[:space:]]* ]] || return 1
+  [[ $path != *';'* ]] || return 1
+  [[ $path != *'|'* ]] || return 1
+  [[ $path != *'&'* ]] || return 1
+  [[ $path != *'$'* ]] || return 1
+  [[ $path != *'`'* ]] || return 1
+  return 0
+}
+
+hexadecimal_byte() {
+  local value=$1
+  value=$((value & 255))
+  printf "%02x" "$value"
+}
+
+devices_available() {
+  [[ -w $STATIC_DEVICE && -w $DYNAMIC_DEVICE ]]
+}
+
+read_accent_hex() {
+  local content
+  content=$(sed 's/^[[:space:]]*#\?//; s/[[:space:]]*$//' "$KEYBOARD_RGB_FILE")
+  if [[ $content =~ ^[0-9A-Fa-f]{6}$ ]]; then
+    printf "%s" "$content"
+  fi
+}
+
+write_static_zone() {
+  local zone=$1 red=$2 green=$3 blue=$4
+  local bitmask=$((1 << (zone - 1)))
+  printf "\\x$(hexadecimal_byte "$bitmask")\\x$(hexadecimal_byte "$red")\\x$(hexadecimal_byte "$green")\\x$(hexadecimal_byte "$blue")" > "$STATIC_DEVICE"
+}
+
+clear_zones() {
+  local zone
+  for zone in $(seq 1 $ZONE_COUNT); do
+    write_static_zone "$zone" 0 0 0
+  done
+  commit_brightness "$BRIGHTNESS"
+}
+
+light_zones() {
+  local delta_red=$1 delta_green=$2 delta_blue=$3
+  shift 3
+  local zone
+  for zone in "$@"; do
+    write_static_zone "$zone" "$delta_red" "$delta_green" "$delta_blue"
+  done
+  commit_brightness "$BRIGHTNESS"
+}
+
+commit_brightness() {
+  local brightness=$1
+  printf "\\x00\\x00\\x$(hexadecimal_byte "$brightness")\\x00\\x00\\x00\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x00" > "$DYNAMIC_DEVICE"
+}
+
+apply_theme_color() {
+  local hex red green blue
+  hex=$(read_accent_hex)
+  [[ -n $hex ]] || return 0
+
+  red=$((16#${hex:0:2}))
+  green=$((16#${hex:2:2}))
+  blue=$((16#${hex:4:2}))
+
+  clear_zones
+  sleep "$STAGGER_DELAY"
+  light_zones "$red" "$green" "$blue" 1 4
+  sleep "$STAGGER_DELAY"
+  light_zones "$red" "$green" "$blue" 1 2 3 4
+}
+
+main() {
+  validate_device_path "$STATIC_DEVICE" || exit 0
+  validate_device_path "$DYNAMIC_DEVICE" || exit 0
+  devices_available || exit 0
+  [[ -r $KEYBOARD_RGB_FILE ]] || exit 0
+  apply_theme_color
+  omarchy-shell -q skvggor.predator-rgb refresh
+}
+
+main
