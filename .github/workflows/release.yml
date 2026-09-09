@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          filter: ""
+
+      - name: List files
+        run: ls -la tests/ package.json
+
+      - name: Verify versions match tag
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(jq -r .version manifest.json)"
+          module_version="$(grep -oP 'MODULE_VERSION\("\K[^"]+' kernel-module/src/acer_rgb.c)"
+
+          echo "Tag: $tag_version"
+          echo "Manifest: $manifest_version"
+          echo "Module: $module_version"
+
+          if [[ "$tag_version" != "$manifest_version" ]]; then
+            echo "ERROR: tag ($tag_version) != manifest ($manifest_version)" >&2
+            exit 1
+          fi
+          if [[ "$tag_version" != "$module_version" ]]; then
+            echo "ERROR: tag ($tag_version) != module ($module_version)" >&2
+            exit 1
+          fi
+          echo "Versions match: $tag_version"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+
+      - name: Run tests
+        run: node --test tests/*.test.js
+
+      - name: Run shell integration tests
+        run: bash tests/theme-set.test.sh
+
+      - name: Install kernel headers
+        run: sudo apt-get update && sudo apt-get install -y linux-headers-$(uname -r)
+
+      - name: Build kernel module
+        run: cd kernel-module && make
+
+      - name: Verify module was built
+        run: test -f kernel-module/acer_rgb.ko
+
+      - name: Create release archive
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          name="predator-rgb-${tag}"
+
+          mkdir -p "dist/${name}"
+          rm -f kernel-module/acer_rgb.ko
+          cp -r kernel-module "dist/${name}/"
+          cp manifest.json Model.js Service.qml Panel.qml theme-set bootstrap.sh install.sh uninstall.sh LICENSE README.md "dist/${name}/"
+
+          cd dist
+          tar czf "${name}.tar.gz" "${name}"
+          sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          asset="predator-rgb-${tag}.tar.gz"
+          gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "${{ github.repository }}" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            "dist/${asset}" \
+            "dist/${asset}.sha256"
+
+      - name: Verify published release
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          asset="predator-rgb-${tag}.tar.gz"
+          staged="dist/${asset}"
+          base="https://github.com/${{ github.repository }}/releases/download/v${tag}"
+
+          ASSET_CURL_OPTS=(--fail --location --retry 5 --retry-delay 2
+            --connect-timeout 10 --max-time 30 --max-filesize 1048576
+            --silent --show-error)
+
+          for url in "$base/${asset}" "$base/${asset}.sha256"; do
+            curl "${ASSET_CURL_OPTS[@]}" --head -o /dev/null "$url"
+            echo "asset published: $url"
+          done
+
+          digest="sha256:$(sha256sum "$staged" | cut -d' ' -f1)"
+          attestation_file="$(mktemp)"
+          trap 'rm -f "$attestation_file"' EXIT
+
+          ATTEST_CURL_OPTS=(--fail --location --retry 5 --retry-delay 2
+            --connect-timeout 5 --max-time 20 --max-filesize 1048576
+            --silent --show-error)
+
+          curl "${ATTEST_CURL_OPTS[@]}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "User-Agent: predator-rgb-release" \
+            "https://api.github.com/repos/${{ github.repository }}/attestations/$digest" \
+            -o "$attestation_file"
+
+          jq -e '.attestations[0].bundle.dsseEnvelope.payload
+            | @base64d
+            | test("https://github\\.com/${{ github.repository }}")
+            and test("https://slsa\\.dev/provenance")' "$attestation_file" >/dev/null
+          echo "attestation served: $digest"

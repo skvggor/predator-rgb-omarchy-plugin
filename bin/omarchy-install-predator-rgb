@@ -1,0 +1,136 @@
+#!/bin/bash
+
+# omarchy:summary=Install the Acer Predator RGB kernel module and configure permissions
+# omarchy:requires-sudo=true
+
+set -euo pipefail
+
+# Pin PATH to trusted system directories when running as root.
+if (( EUID == 0 )); then
+  export PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin
+fi
+
+# Use absolute path to this script for safe re-exec
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULE_DIR="$SCRIPT_DIR/../kernel-module"
+UDEV_DIR="$SCRIPT_DIR/../udev"
+SYSFS_DIR="/sys/devices/platform/acer_rgb/four_zoned_kb"
+
+usage() {
+  echo "Usage: $(basename "$0") [--check|--install|--uninstall]" >&2
+  echo "  --check      Verify kernel headers are available (no root needed)" >&2
+  echo "  --install    Build, install, and configure the kernel module (needs root)" >&2
+  echo "  --uninstall  Remove the kernel module (needs root)" >&2
+  exit 1
+}
+
+check_headers() {
+  local kernel_release
+  kernel_release="$(uname -r)"
+  [[ -d "/usr/lib/modules/$kernel_release/build" ]] || [[ -d "/lib/modules/$kernel_release/build" ]]
+}
+
+do_install() {
+  if [[ ! -d "$MODULE_DIR" ]]; then
+    echo "ERROR: Kernel module source not found at $MODULE_DIR" >&2
+    exit 1
+  fi
+
+  if ! check_headers; then
+    echo "ERROR: Kernel headers not found for $(uname -r)" >&2
+    echo "Install: sudo pacman -S linux-headers" >&2
+    exit 1
+  fi
+
+  echo "Building and installing kernel module..."
+
+  cd "$MODULE_DIR"
+  make install
+
+  depmod -a
+
+  echo "acer_rgb" > /etc/modules-load.d/acer_rgb.conf
+
+  modprobe -r acer_rgb 2>/dev/null || true
+  modprobe acer_rgb
+
+  # Create acer_rgb group if it doesn't exist
+  if ! getent group acer_rgb >/dev/null 2>&1; then
+    groupadd acer_rgb
+    echo "Created group acer_rgb"
+  fi
+
+  # Add current user to acer_rgb group
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    usermod -aG acer_rgb "$SUDO_USER"
+    echo "Added user $SUDO_USER to group acer_rgb"
+  fi
+
+  # Install udev rule for sysfs permissions
+  echo "Installing udev rule..."
+  cp "$UDEV_DIR/90-acer-rgb.rules" /etc/udev/rules.d/90-acer-rgb.rules
+  mkdir -p /usr/libexec
+  cp "$UDEV_DIR/acer-rgb-set-perms" /usr/libexec/acer-rgb-set-perms
+  chmod 755 /usr/libexec/acer-rgb-set-perms
+  udevadm control --reload-rules
+  udevadm trigger --subsystem-match=platform --attr-match=driver=acer_rgb
+
+  # Set permissions now (in case udev trigger didn't fire for already-loaded device)
+  if [[ -d "$SYSFS_DIR" ]]; then
+    chgrp acer_rgb "$SYSFS_DIR"/* 2>/dev/null || true
+    chmod 0660 "$SYSFS_DIR"/* 2>/dev/null || true
+  fi
+
+  echo "Kernel module installed and loaded."
+  echo "No logout required — udev rules handle permissions automatically."
+  echo "You may need to log out and back in for group changes to take effect."
+}
+
+do_uninstall() {
+  if [[ -d "$MODULE_DIR" ]]; then
+    cd "$MODULE_DIR"
+    make uninstall 2>/dev/null || true
+  fi
+
+  rm -f /etc/modules-load.d/acer_rgb.conf
+  rm -f /etc/udev/rules.d/90-acer-rgb.rules
+  rm -f /usr/libexec/acer-rgb-set-perms
+  udevadm control --reload-rules 2>/dev/null || true
+  modprobe -r acer_rgb 2>/dev/null || true
+  depmod -a 2>/dev/null || true
+
+  echo "Kernel module and udev rules removed."
+}
+
+require_root() {
+  if (( EUID == 0 )); then
+    return
+  elif [[ -t 0 ]]; then
+    exec sudo "$SCRIPT_PATH" "$@"
+  else
+    exec pkexec "$SCRIPT_PATH" "$@"
+  fi
+}
+
+case "${1:-}" in
+  --check)
+    if check_headers; then
+      echo "Kernel headers found for $(uname -r)"
+    else
+      echo "Kernel headers NOT found for $(uname -r)" >&2
+      exit 1
+    fi
+    ;;
+  --install)
+    require_root "$@"
+    do_install
+    ;;
+  --uninstall)
+    require_root "$@"
+    do_uninstall
+    ;;
+  *)
+    usage
+    ;;
+esac

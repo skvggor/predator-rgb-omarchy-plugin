@@ -2,20 +2,21 @@
   "schemaVersion": 1,
   "id": "skvggor.predator-rgb",
   "name": "Predator RGB",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "skvggor",
   "license": "GPL-3.0",
-  "description": "Syncs the Acer Predator Helios Neo 16 keyboard backlight with the active Omarchy theme accent color.",
+  "description": "Syncs the Acer Predator Helios Neo 16 keyboard backlight and back logo with the active Omarchy theme accent color.",
   "kinds": ["bar-widget"],
   "entryPoints": { "barWidget": "Panel.qml" },
   "barWidget": {
     "displayName": "Predator RGB",
-    "description": "Show the keyboard LED status and apply the current theme accent color.",
+    "description": "Show the keyboard LED status and apply the current theme accent color to keyboard and back logo.",
     "category": "Hardware",
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "brightness": 100
+      "brightness": 100,
+      "backLogoEnabled": true
     },
     "schema": [
       {
@@ -26,6 +27,12 @@
         "max": 100,
         "step": 1,
         "defaultValue": 100
+      },
+      {
+        "key": "backLogoEnabled",
+        "type": "boolean",
+        "label": "Enable back logo LED",
+        "defaultValue": true
       }
     ]
   }
