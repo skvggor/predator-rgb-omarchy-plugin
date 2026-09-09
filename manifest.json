@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "skvggor.predator-rgb",
   "name": "Predator RGB",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "skvggor",
   "license": "GPL-3.0",
   "description": "Syncs the Acer Predator Helios Neo 16 keyboard backlight and back logo with the active Omarchy theme accent color.",
