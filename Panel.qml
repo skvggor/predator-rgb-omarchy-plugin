@@ -14,6 +14,8 @@ Panel {
     readonly property color dim: Qt.darker(foreground, 1.55)
     readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
     readonly property color ledColor: Model.hexToRgb(led.accent) ? ("#" + led.accent) : foreground
+    readonly property bool needsSetup: led.available === false
+    readonly property string installScript: String(Qt.resolvedUrl("bin/omarchy-install-predator-rgb")).replace(/^file:\/\//, "")
 
     moduleName: "skvggor.predator-rgb"
     ipcTarget: "skvggor.predator-rgb"
@@ -54,6 +56,20 @@ Panel {
         target: root.ipcTarget
     }
 
+    Process {
+        id: installProcess
+
+        property bool running: false
+
+        command: ["pkexec", root.installScript, "--install"]
+        onExited: function(exitCode) {
+            running = false;
+            if (exitCode === 0) {
+                led.refresh();
+            }
+        }
+    }
+
     component LedIndicator: Rectangle {
         id: indicator
 
@@ -82,8 +98,14 @@ Panel {
 
         anchors.fill: parent
         bar: root.bar
-        tooltipText: !led.available ? "Acer Predator Helios Neo 16: not detected" : "Acer Predator Helios Neo 16: " + led.themeName + " (" + led.accent + ")"
+        tooltipText: root.needsSetup
+            ? "Predator RGB: click to install kernel module"
+            : !led.available ? "Acer Predator Helios Neo 16: not detected" : "Acer Predator Helios Neo 16: " + led.themeName + " (" + led.accent + ")"
         onPressed: function(buttonCode) {
+            if (root.needsSetup) {
+                installProcess.running = true;
+                return;
+            }
             if (buttonCode === Qt.MiddleButton)
                 led.apply();
             else
@@ -94,12 +116,11 @@ Panel {
             Item {
                 LedIndicator {
                     anchors.centerIn: parent
-                    ledColor: root.ledColor
+                    ledColor: root.needsSetup ? root.dim : root.ledColor
                     borderColor: root.foreground
                 }
             }
         }
-
     }
 
     KeyboardPanel {
@@ -141,6 +162,57 @@ Panel {
             Column {
                 width: parent.width
                 spacing: Style.space(8)
+                visible: root.needsSetup
+
+                Text {
+                    width: parent.width
+                    text: "Kernel module not installed. Click the button in the bar to install it."
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Item {
+                    width: parent.width
+                    height: Style.space(32)
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: installLabel.implicitWidth + Style.space(32)
+                        height: Style.space(32)
+                        radius: Style.space(8)
+                        color: Util.alpha(root.ledColor, 0.15)
+                        border.width: 1
+                        border.color: Util.alpha(root.ledColor, 0.4)
+
+                        Text {
+                            id: installLabel
+                            anchors.centerIn: parent
+                            text: installProcess.running ? "Installing..." : "Install Kernel Module"
+                            color: root.ledColor
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (!installProcess.running)
+                                    installProcess.running = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: Style.space(8)
+                visible: !root.needsSetup
 
                 Item {
                     width: parent.width
