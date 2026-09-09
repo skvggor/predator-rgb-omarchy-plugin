@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # v4.0.0
+        with:
+          node-version: "20"
+
+      - name: Run JavaScript tests
+        run: npm test
+
+      - name: Run shell integration tests
+        run: bash tests/theme-set.test.sh
+
+  build-module:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install kernel headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-headers-$(uname -r)
+
+      - name: Build kernel module
+        run: |
+          cd kernel-module
+          make
+
+      - name: Verify module was built
+        run: |
+          test -f kernel-module/acer_rgb.ko
+          echo "Module built successfully"
+
+  release:
+    needs: [test, build-module]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          MANIFEST_VERSION=$(jq -r '.version' manifest.json)
+          MODULE_VERSION=$(grep -oP 'MODULE_VERSION\("\K[^"]+' kernel-module/src/acer_rgb.c)
+
+          echo "Git tag: $TAG_VERSION"
+          echo "Manifest: $MANIFEST_VERSION"
+          echo "Module: $MODULE_VERSION"
+
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "ERROR: Tag ($TAG_VERSION) != manifest ($MANIFEST_VERSION)"
+            exit 1
+          fi
+
+          if [ "$TAG_VERSION" != "$MODULE_VERSION" ]; then
+            echo "ERROR: Tag ($TAG_VERSION) != module ($MODULE_VERSION)"
+            exit 1
+          fi
+
+          echo "Versions match: $TAG_VERSION"
+
+      - uses: actions/setup-node@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # v4.0.0
+        with:
+          node-version: "20"
+
+      - name: Run tests
+        run: npm test
+
+      - name: Install kernel headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-headers-$(uname -r)
+
+      - name: Build kernel module
+        run: |
+          cd kernel-module
+          make
+
+      - name: Create release archive
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          ARCHIVE_NAME="predator-rgb-${TAG_VERSION}"
+
+          mkdir -p "dist/${ARCHIVE_NAME}"
+
+          # Source only: drop the CI-built .ko (built against Ubuntu headers, not the target)
+          rm -f kernel-module/acer_rgb.ko
+          cp -r kernel-module "dist/${ARCHIVE_NAME}/"
+          cp manifest.json Model.js Service.qml Panel.qml theme-set bootstrap.sh install.sh uninstall.sh LICENSE README.md "dist/${ARCHIVE_NAME}/"
+
+          cd dist
+          tar czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          sha256sum "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+
+          echo "Archive created:"
+          ls -la "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}.tar.gz.sha256"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: dist/*.tar.gz
+          subject-path: dist/*.tar.gz.sha256
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@de2c0eb89de2a093876385947365aca7b0e5f844 # v2.0.0
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+      # Verify published release has valid attestation before users can download
+      - name: Verify published release
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/v}"
+          asset="predator-rgb-${tag}.tar.gz"
+          staged="dist/${asset}"
+          base="https://github.com/${{ github.repository }}/releases/download/v${tag}"
+
+          # Hard ceilings for asset checks (HEAD requests, small)
+          ASSET_CURL_OPTS=(--fail --location --retry 5 --retry-delay 2
+            --connect-timeout 10 --max-time 30 --max-filesize 1048576
+            --silent --show-error)
+
+          for url in "$base/${asset}" "$base/${asset}.sha256"; do
+            curl "${ASSET_CURL_OPTS[@]}" --head -o /dev/null "$url"
+            echo "asset published: $url"
+          done
+
+          digest="sha256:$(sha256sum "$staged" | cut -d' ' -f1)"
+          attestation_file="$(mktemp)"
+          trap 'rm -f "$attestation_file"' EXIT
+
+          # Hard ceilings for attestation API
+          ATTEST_CURL_OPTS=(--fail --location --retry 5 --retry-delay 2
+            --connect-timeout 5 --max-time 20 --max-filesize 1048576
+            --silent --show-error)
+
+          curl "${ATTEST_CURL_OPTS[@]}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "User-Agent: predator-rgb-release" \
+            "https://api.github.com/repos/${{ github.repository }}/attestations/$digest" \
+            -o "$attestation_file"
+
+          jq -e '.attestations[0].bundle.dsseEnvelope.payload
+            | @base64d
+            | test("https://github\\.com/${{ github.repository }}")
+            and test("https://slsa\\.dev/provenance")' "$attestation_file" >/dev/null
+          echo "attestation served: $digest"

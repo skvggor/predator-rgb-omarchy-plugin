@@ -1,5 +1,6 @@
 import "Model.js" as Model
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
@@ -17,8 +18,6 @@ Panel {
     moduleName: "skvggor.predator-rgb"
     ipcTarget: "skvggor.predator-rgb"
     manageIpc: false
-    implicitWidth: button.implicitWidth
-    implicitHeight: button.implicitHeight
     onOpenedChanged: {
         if (opened) {
             led.refresh();
@@ -47,7 +46,8 @@ Panel {
                 "available": led.available,
                 "applied": led.applied,
                 "themeName": led.themeName,
-                "accent": led.accent
+                "accent": led.accent,
+                "backLogoEnabled": led.backLogoEnabled
             });
         }
 
@@ -82,7 +82,7 @@ Panel {
 
         anchors.fill: parent
         bar: root.bar
-        tooltipText: !led.available ? "Acer Predator Helios Neo 16: keyboard not detected" : "Acer Predator Helios Neo 16: " + led.themeName + " (" + led.accent + ")"
+        tooltipText: !led.available ? "Acer Predator Helios Neo 16: not detected" : "Acer Predator Helios Neo 16: " + led.themeName + " (" + led.accent + ")"
         onPressed: function(buttonCode) {
             if (buttonCode === Qt.MiddleButton)
                 led.apply();
@@ -110,7 +110,7 @@ Panel {
         bar: root.bar
         open: root.opened
         contentWidth: panel.fittedContentWidth(Style.space(300))
-        contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(360))
+        contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(160))
 
         Column {
             id: column
@@ -118,51 +118,159 @@ Panel {
             width: parent.width
             spacing: Style.space(12)
 
-            Item {
+            PanelHero {
                 width: parent.width
-                height: heroRow.implicitHeight
-
-                Row {
-                    id: heroRow
-                    width: parent.width
-                    spacing: Style.space(12)
-
-                    LedIndicator {
-                        anchors.verticalCenter: parent.verticalCenter
-                        ledColor: root.ledColor
-                        borderColor: root.foreground
+                title: "Predator RGB"
+                meta: "Acer Predator Helios Neo 16"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                iconComponent: Component {
+                    Text {
+                        text: "󰌌"
+                        color: root.ledColor
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.display
                     }
-
-                    Column {
-                        Layout.fillWidth: true
-                        spacing: Style.space(2)
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: "Acer Predator Helios Neo 16"
-                            color: root.foreground
-                            font.family: root.fontFamily
-                            font.pixelSize: Style.font.body
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: led.available ? led.themeName + " · " + led.accent : "keyboard not detected"
-                            color: led.available ? root.dim : Color.urgent
-                            font.family: root.fontFamily
-                            font.pixelSize: Style.font.caption
-                            elide: Text.ElideRight
-                        }
-
-                    }
-
                 }
-
             }
 
             PanelSeparator {
                 foreground: root.foreground
+            }
+
+            Column {
+                width: parent.width
+                spacing: Style.space(8)
+
+                Item {
+                    width: parent.width
+                    height: Style.space(18)
+                    visible: led.available
+
+                    Text {
+                        id: kbdIcon
+                        text: "󰌌"
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.icon
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        id: kbdLabel
+                        text: "Keyboard"
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.body
+                        anchors.left: kbdIcon.right
+                        anchors.leftMargin: Style.space(8)
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Rectangle {
+                        id: kbdStatus
+                        height: Style.space(18)
+                        width: Style.space(7) + kbdDot.width + Style.space(6) + Math.ceil(kbdStatusLabel.implicitWidth) + Style.space(8)
+                        radius: height / 2
+                        color: Util.alpha(root.ledColor, 0.12)
+                        border.width: 1
+                        border.color: Util.alpha(root.ledColor, 0.35)
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Rectangle {
+                            id: kbdDot
+                            anchors.left: parent.left
+                            anchors.leftMargin: Style.space(7)
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Style.space(6)
+                            height: width
+                            radius: width / 2
+                            color: root.ledColor
+                        }
+
+                        Text {
+                            id: kbdStatusLabel
+                            anchors.left: kbdDot.right
+                            anchors.leftMargin: Style.space(6)
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "ON"
+                            color: root.ledColor
+                            textFormat: Text.PlainText
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            font.letterSpacing: 1.2
+                            font.capitalization: Font.AllUppercase
+                        }
+                    }
+                }
+
+                Item {
+                    width: parent.width
+                    height: Style.space(18)
+                    visible: led.available
+
+                    Text {
+                        id: logoIcon
+                        text: "󰖨"
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.icon
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        id: logoLabel
+                        text: "Back logo"
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.body
+                        anchors.left: logoIcon.right
+                        anchors.leftMargin: Style.space(8)
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Rectangle {
+                        id: logoStatus
+                        height: Style.space(18)
+                        width: Style.space(7) + logoDot.width + Style.space(6) + Math.ceil(logoStatusLabel.implicitWidth) + Style.space(8)
+                        radius: height / 2
+                        color: led.backLogoEnabled ? Util.alpha(root.ledColor, 0.12) : Util.alpha(root.dim, 0.12)
+                        border.width: 1
+                        border.color: led.backLogoEnabled ? Util.alpha(root.ledColor, 0.35) : Util.alpha(root.dim, 0.35)
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Rectangle {
+                            id: logoDot
+                            anchors.left: parent.left
+                            anchors.leftMargin: Style.space(7)
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Style.space(6)
+                            height: width
+                            radius: width / 2
+                            color: led.backLogoEnabled ? root.ledColor : root.dim
+                        }
+
+                        Text {
+                            id: logoStatusLabel
+                            anchors.left: logoDot.right
+                            anchors.leftMargin: Style.space(6)
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: led.backLogoEnabled ? "ON" : "OFF"
+                            color: led.backLogoEnabled ? root.ledColor : root.dim
+                            textFormat: Text.PlainText
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            font.letterSpacing: 1.2
+                            font.capitalization: Font.AllUppercase
+                        }
+                    }
+                }
             }
 
             Text {
@@ -174,29 +282,6 @@ Panel {
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
             }
-
-            Button {
-                id: applyButton
-
-                width: parent.width
-                text: "Apply LED color"
-                iconText: "󰄳"
-                foreground: Color.accent
-                accent: Color.accent
-                fontFamily: root.fontFamily
-                enabled: led.available && !led.busy
-                onClicked: led.apply()
-            }
-
-            Text {
-                width: parent.width
-                text: "The keyboard backlight follows the active Omarchy theme automatically."
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
-            }
-
         }
 
     }

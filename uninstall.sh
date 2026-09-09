@@ -5,28 +5,37 @@ PLUGIN_ID="skvggor.predator-rgb"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$HOME/.config/omarchy/plugins/$PLUGIN_ID"
 HOOK_TARGET="$HOME/.config/omarchy/hooks/theme-set.d/omarchy-predator-rgb"
+INSTALL_BIN="$SCRIPT_DIR/bin/omarchy-install-predator-rgb"
 
-echo "=== predator-rgb-omarchy-plugin uninstaller ==="
+echo "=== predator-rgb uninstaller ==="
 
+# --- Remove kernel module (needs root) ---
+echo ""
+echo "[1/4] Removing kernel module..."
+"$INSTALL_BIN" --uninstall
+echo "[1/4] Kernel module removed"
+
+# --- Remove hook ---
+echo ""
 if [[ -L "$HOOK_TARGET" || -e "$HOOK_TARGET" ]]; then
   rm -f "$HOOK_TARGET"
-  echo "[1/3] Removed hook"
+  echo "[2/4] Removed hook"
 else
-  echo "[1/3] Hook not present"
+  echo "[2/4] Hook not present"
 fi
 
+# --- Remove plugin files ---
 if [[ ${1:-} == "--purge" && -d "$PLUGIN_DIR" ]]; then
   rm -rf "$PLUGIN_DIR"
-  echo "[2/3] Removed plugin files"
+  echo "[3/4] Removed plugin files"
 else
-  echo "[2/3] Plugin files left at $PLUGIN_DIR (use --purge to remove)"
+  echo "[3/4] Plugin files left at $PLUGIN_DIR (use --purge to remove)"
 fi
 
-omarchy plugin disable "$PLUGIN_ID" || true
-omarchy-shell shell rescanPlugins || true
-echo "[3/3] Plugin disabled in the bar"
+# --- Disable plugin ---
+omarchy plugin disable "$PLUGIN_ID" 2>/dev/null || true
+omarchy-shell shell rescanPlugins 2>/dev/null || true
+echo "[4/4] Plugin disabled"
 
 echo ""
-echo "=== Uninstall complete ==="
-echo "(Optional) If you ran setup-kernel-module.sh, undo it with:"
-echo "  sudo $SCRIPT_DIR/setup-kernel-module.sh --undo"
+echo "=== Done ==="

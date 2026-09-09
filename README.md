@@ -4,17 +4,17 @@
 
 [![Demo Video](https://img.youtube.com/vi/nR_2H0sh1xg/0.jpg)](https://youtube.com/shorts/nR_2H0sh1xg)
 
-An Omarchy plugin that keeps the **Acer Predator Helios Neo 16** keyboard backlight in sync with the active Omarchy theme. Every time you switch themes, the LEDs switch to the theme's **accent color** at **100% brightness** (configurable).
+An Omarchy plugin that keeps the **Acer Predator Helios Neo 16** keyboard backlight and rear lid logo in sync with the active Omarchy theme. Every time you switch themes, the LEDs switch to the theme's **accent color** at **100% brightness** (configurable).
 
 ## How it works
 
 Omarchy already ships `omarchy-theme-set-keyboard`, but it only covers ASUS ROG and Framework 16, not the Acer Predator. This plugin fills that gap.
 
 1. On every theme change, Omarchy writes the theme accent hex to `~/.local/state/omarchy/current/theme/keyboard.rgb`.
-2. The installed `theme-set.d` hook (`theme-set`) reads that hex and drives the `acer-gkbbl` kernel module directly:
-   - static color per zone → `/dev/acer-gkbbl-static-0`
-   - 100% brightness (commit byte) → `/dev/acer-gkbbl-0`
-3. A bar widget shows the current theme + accent and offers an "Apply now" button.
+2. The installed `theme-set.d` hook (`theme-set`) reads that hex and drives the `acer_rgb` kernel module:
+   - Writes to `/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode`
+   - All 4 zones set to the same color at full brightness; also writes `/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo`
+3. A bar widget shows the current theme + accent and status.
 
 ```
 omarchy theme set <theme>
@@ -23,41 +23,58 @@ omarchy theme set <theme>
 ~/.local/state/omarchy/current/theme/keyboard.rgb   (#819890)
       │
       ▼
-theme-set hook  (hex → per-zone static payload + brightness commit)
+theme-set hook  (hex → per-zone + back-logo sysfs write)
       │
       ▼
-/dev/acer-gkbbl-static-0   (1..4)   ·   /dev/acer-gkbbl-0
+/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode
+/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo
 ```
 
-The device nodes are world-writable (`crw-rw-rw-`), so **no root is required** at theme-change time. The hook exits silently when the module isn't loaded.
+The sysfs interface is accessible to users in the `acer_rgb` group, so **no root is required** at theme-change time. The hook exits silently when the module isn't loaded.
 
-## Limitations
+## Supported LEDs
 
-This plugin only drives the **keyboard** backlight (4 zones via the `acer-gkbbl` WMI module).
-
-The **rear lid logo** (the Predator emblem on the back of the display) is **not controllable** on the Predator Helios Neo 16 **PHN16-72**:
-
-- Its RGB uses the WMI/EC path, which does **not** expose the logo (verified by reverse-engineering the ACPI tables).
-- There is **no USB HID controller** for the logo on this model (no ENEK5130 / Sunrex `05af:*` / Darfon `0d62:*`), so tools like OpenRGB cannot reach it either.
-- The logo is a fixed LED driven directly by the embedded controller, with no writable endpoint exposed to Linux.
-
-Lid-logo RGB via HID/OpenRGB is only possible on newer generations (e.g. PHN16-73 and 2024+ models) that moved lighting onto USB HID controllers.
+- **Keyboard** — 4-zone RGB backlight, all zones set to the theme accent via WMI method `0x06` (zone color) + `0x14` (mode/brightness) under GUID `7A4DDFE7-5B5D-40B4-8595-4408E0CC7F56`.
+- **Rear lid logo** — switched on/off and colored via WMI method `0x0C` (RGB + brightness + enable) + `0x14` power gate. Controlled with the `backLogoEnabled` setting.
 
 ## Requirements
 
 - Omarchy with the template/hook system
-- The `acer-gkbbl` kernel module loaded (device nodes present)
-- Acer Predator Helios Neo 16 (or any laptop the module supports)
+- Acer Predator Helios Neo 16 **PHN16-72** (kernel module DMI match)
+- **Kernel headers** (will be installed automatically if missing)
 
 ## Install
 
+### Option A: Omarchy plugin add (recommended)
+
 ```sh
-omarchy plugin add git@github.com:skvggor/predator-rgb-omarchy-plugin.git --enable
+omarchy plugin add git@github.com:skvggor/predator-rgb-omarchy-plugin.git
 ```
 
-This installs the plugin, enables the bar widget, and applies the current theme immediately. No root is required.
+Then run the setup script to install the kernel module and configure permissions:
 
-Alternatively, you can install manually:
+```sh
+cd ~/.config/omarchy/plugins/skvggor.predator-rgb
+./install.sh
+```
+
+The install script will automatically:
+- Install `linux-headers` if missing
+- Build and install the kernel module
+- Create the `acer_rgb` group
+- Configure udev rules for permissions
+- Enable the plugin
+
+A polkit popup will ask for your password (no terminal required).
+
+### Option B: One-liner from GitHub
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/skvggor/predator-rgb-omarchy-plugin/main/bootstrap.sh -o /tmp/predator-rgb-bootstrap.sh
+bash /tmp/predator-rgb-bootstrap.sh
+```
+
+### Option C: Clone + install
 
 ```sh
 git clone git@github.com:skvggor/predator-rgb-omarchy-plugin.git
@@ -65,28 +82,28 @@ cd predator-rgb-omarchy-plugin
 ./install.sh
 ```
 
-### Keep the kernel module loaded across reboots (one-time)
+## Install command
 
-The stock `acer_wmi` driver claims the same WMI GUID as `facer` and, when auto-loaded after boot, stops the keyboard RGB from working (it unbinds `facer`). To keep `facer` as the sole driver, run this **once** with your normal sudo:
+The `bin/omarchy-install-predator-rgb` command follows the Omarchy dual-path pattern:
 
 ```sh
-sudo ./setup-kernel-module.sh
+bin/omarchy-install-predator-rgb --check      # Verify kernel headers (no root)
+bin/omarchy-install-predator-rgb --install    # Build + install module (needs root)
+bin/omarchy-install-predator-rgb --uninstall  # Remove module (needs root)
 ```
 
-This writes a single reversible file, `/etc/modprobe.d/acer-predator-rgb.conf`, blacklisting `acer_wmi`, and ensures `facer` is loaded. No root is required at theme-change time.
+When run from a terminal, uses `sudo`. When run from the shell (no terminal), uses `pkexec` with the Omarchy polkit popup.
 
 ## Usage
 
-Theme changes sync automatically. The bar icon opens a panel with the current theme, accent swatch, and an "Apply LED color" button (also bound to middle-click on the icon).
+Theme changes sync automatically. The bar icon opens a panel showing the current theme, accent color, and LED status.
 
 ### Settings
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
 | `brightness` | integer | `100` | Static LED brightness (0-100) |
-| `staggerDelay` | float | `0.9` | Seconds between each zone update on change, producing a left-to-right cascade (`0` = all at once) |
-| `staticDevice` | string | `/dev/acer-gkbbl-static-0` | Path to the static LED device node |
-| `dynamicDevice` | string | `/dev/acer-gkbbl-0` | Path to the dynamic LED device node |
+| `backLogoEnabled` | boolean | `true` | Turn the rear lid logo on (colored like the keyboard) or off |
 
 Set via `omarchy bar set skvggor.predator-rgb brightness 80` or the shell settings UI.
 
@@ -94,20 +111,19 @@ Set via `omarchy bar set skvggor.predator-rgb brightness 80` or the shell settin
 
 | File | Purpose |
 |------|---------|
-| `theme-set` | Hook + CLI: reads accent hex and writes static color + brightness to `/dev` |
+| `theme-set` | Hook + CLI: reads accent hex and writes to acer_rgb sysfs |
 | `manifest.json` | Omarchy plugin manifest (bar widget) |
 | `Panel.qml` | Bar widget UI |
 | `Service.qml` | Plugin state, refresh, and apply logic |
-| `Model.js` | Pure JS helpers: hex parsing, payload bytes |
-| `install.sh` / `uninstall.sh` | Install / remove hook + plugin (no root required) |
-| `setup-kernel-module.sh` | One-time optional root setup: blacklists `acer_wmi` so `facer` survives reboots (`--undo` reverses) |
-| `tests/` | JS unit tests + shell integration tests for the payload bytes |
+| `Model.js` | Pure JS helpers: hex parsing |
+| `bin/omarchy-install-predator-rgb` | Privileged install/uninstall with polkit support |
+| `install.sh` / `uninstall.sh` | User-space wrappers |
+| `kernel-module/src/acer_rgb.c` | Kernel module: WMI control of 4-zone keyboard + back logo |
 
 ## Development
 
 ```sh
 npm test                 # Model.js unit tests
-tests/theme-set.test.sh  # integration: verifies the exact bytes written
 omarchy plugin validate . # manifest schema check
 ```
 
@@ -121,17 +137,9 @@ eslint .
 ## Uninstall
 
 ```sh
-./uninstall.sh           # removes hook + disables widget (keeps files)
+./uninstall.sh           # removes module + hook + disables widget
 ./uninstall.sh --purge   # also deletes the copied plugin files
 ```
-
-`uninstall.sh` is **entirely user-space (no root)**. Fully reversible: if you ran the one-time kernel setup, undo it with:
-
-```sh
-sudo ./setup-kernel-module.sh --undo   # removes the acer_wmi blacklist
-```
-
-The stock `acer_wmi` driver is then restored after the next reboot.
 
 ## License
 
