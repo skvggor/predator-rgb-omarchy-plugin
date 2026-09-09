@@ -19,7 +19,7 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("skvggor");
 MODULE_DESCRIPTION("RGB LED control for Acer Predator PHN16-72 via WMI");
-MODULE_VERSION("0.5.1");
+MODULE_VERSION("0.2.1");
 
 static struct platform_device *acer_rgb_pdev;
 
