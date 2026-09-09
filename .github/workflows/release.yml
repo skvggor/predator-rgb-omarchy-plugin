@@ -21,7 +21,8 @@ jobs:
 
       - name: Verify tag is on main
         run: |
-          if ! git branch --contains HEAD | grep -q 'main'; then
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
             echo "ERROR: tag must be on main branch" >&2
             exit 1
           fi
