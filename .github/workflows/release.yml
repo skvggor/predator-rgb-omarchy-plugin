@@ -17,6 +17,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           filter: ""
+          fetch-depth: 0
+
+      - name: Verify tag is on main
+        run: |
+          if ! git branch --contains HEAD | grep -q 'main'; then
+            echo "ERROR: tag must be on main branch" >&2
+            exit 1
+          fi
 
       - name: List files
         run: ls -la tests/ package.json
