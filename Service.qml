@@ -14,9 +14,10 @@ Item {
     property string accent: ""
     property string lastError: ""
     property bool busy: applyProcess.running
-    readonly property int brightness: intSetting("brightness", Model.DEFAULT_BRIGHTNESS, 0, 100)
-    readonly property string staticDevice: "/dev/acer-gkbbl-static-0"
-    readonly property string dynamicDevice: "/dev/acer-gkbbl-0"
+    property int brightness: intSetting("brightness", Model.DEFAULT_BRIGHTNESS, 0, 100)
+    property bool backLogoEnabled: boolSetting("backLogoEnabled", true)
+    readonly property string acerRgbSysfs: "/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
+    readonly property string backLogoSysfs: "/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
     // The theme-set hook ships beside this file (installed by install.sh) and is
     // run by the global theme-set.d hook; the panel invokes it on demand too.
     readonly property string hookPath: String(Qt.resolvedUrl("theme-set")).replace(/^file:\/\//, "")
@@ -40,6 +41,13 @@ Item {
         return number;
     }
 
+    function boolSetting(name, fallback) {
+        var value = setting(name, undefined);
+        if (value === undefined || value === null)
+            return fallback;
+        return value === true || value === "true" || value === 1;
+    }
+
     function refresh() {
         if (probeProcess.running)
             return ;
@@ -47,15 +55,14 @@ Item {
         const script = [
             "keyboard_rgb=\"$HOME/.local/state/omarchy/current/theme/keyboard.rgb\"",
             "theme_file=\"$HOME/.local/state/omarchy/current/theme.name\"",
-            "static_device=\"$1\"",
-            "dynamic_device=\"$2\"",
+            "acer_rgb_sysfs=\"$1\"",
             "accent=$(sed 's/^[[:space:]]*#\\?//' \"$keyboard_rgb\" 2>/dev/null)",
             "name=$(cat \"$theme_file\" 2>/dev/null)",
             "is_available=false",
-            "[ -w \"$static_device\" ] && [ -w \"$dynamic_device\" ] && is_available=true",
+            "[ -d /sys/module/acer_rgb ] && [ -w \"$acer_rgb_sysfs\" ] && is_available=true",
             "printf '{\"accent\":\"%s\",\"themeName\":\"%s\",\"available\":%s}\\n' \"$accent\" \"$name\" \"$is_available\""
         ].join("; ")
-        probeProcess.command = ["sh", "-c", script, "predator-rgb-probe", staticDevice, dynamicDevice]
+        probeProcess.command = ["sh", "-c", script, "predator-rgb-probe", acerRgbSysfs]
         probeProcess.running = true
     }
 
@@ -63,7 +70,10 @@ Item {
         if (applyProcess.running || !available)
             return ;
 
-        applyProcess.environment = ["PREDATOR_RGB_BRIGHTNESS=" + String(brightness)];
+        applyProcess.environment = [
+            "PREDATOR_RGB_BRIGHTNESS=" + String(brightness),
+            "PREDATOR_RGB_BACK_LOGO=" + String(backLogoEnabled)
+        ];
         applyProcess.command = [hookPath];
         applyProcess.running = true;
     }
