@@ -62,12 +62,9 @@ Panel {
 
     Process {
         id: installProcess
-
-        property bool running: false
-
+        running: false
         command: ["pkexec", root.installScript, "--install"]
         onExited: function(exitCode) {
-            running = false;
             if (exitCode === 0) {
                 led.refresh();
             }
