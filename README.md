@@ -45,54 +45,23 @@ The sysfs interface is accessible to users in the `acer_rgb` group, so **no root
 
 ## Install
 
-### Option A: Omarchy plugin add (recommended)
+### 1. Install the plugin
 
 ```sh
-omarchy plugin add git@github.com:skvggor/predator-rgb-omarchy-plugin.git
+omarchy plugin add git@github.com:skvggor/predator-rgb-omarchy-plugin.git --enable
 ```
 
-Then run the setup script to install the kernel module and configure permissions:
+### 2. Install the kernel module
+
+Click the Predator RGB icon in the bar → click **Install Kernel Module**. A polkit popup will ask for your password.
+
+### 3. Install the theme-set hook
 
 ```sh
-cd ~/.config/omarchy/plugins/skvggor.predator-rgb
-./install.sh
+ln -sf ~/.config/omarchy/plugins/skvggor.predator-rgb/theme-set ~/.config/omarchy/hooks/theme-set.d/omarchy-predator-rgb
 ```
 
-The install script will automatically:
-- Install `linux-headers` if missing
-- Build and install the kernel module
-- Create the `acer_rgb` group
-- Configure udev rules for permissions
-- Enable the plugin
-
-A polkit popup will ask for your password (no terminal required).
-
-### Option B: One-liner from GitHub
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/skvggor/predator-rgb-omarchy-plugin/main/bootstrap.sh -o /tmp/predator-rgb-bootstrap.sh
-bash /tmp/predator-rgb-bootstrap.sh
-```
-
-### Option C: Clone + install
-
-```sh
-git clone git@github.com:skvggor/predator-rgb-omarchy-plugin.git
-cd predator-rgb-omarchy-plugin
-./install.sh
-```
-
-## Install command
-
-The `bin/omarchy-install-predator-rgb` command follows the Omarchy dual-path pattern:
-
-```sh
-bin/omarchy-install-predator-rgb --check      # Verify kernel headers (no root)
-bin/omarchy-install-predator-rgb --install    # Build + install module (needs root)
-bin/omarchy-install-predator-rgb --uninstall  # Remove module (needs root)
-```
-
-When run from a terminal, uses `sudo`. When run from the shell (no terminal), uses `pkexec` with the Omarchy polkit popup.
+This ensures the keyboard color updates automatically when you switch themes.
 
 ## Usage
 
@@ -107,38 +76,48 @@ Theme changes sync automatically. The bar icon opens a panel showing the current
 
 Set via `omarchy bar set skvggor.predator-rgb brightness 80` or the shell settings UI.
 
+## Install command
+
+The `bin/omarchy-install-predator-rgb` command follows the Omarchy dual-path pattern:
+
+```sh
+bin/omarchy-install-predator-rgb --check      # Verify kernel headers (no root)
+bin/omarchy-install-predator-rgb --install    # Build + install module (needs root)
+bin/omarchy-install-predator-rgb --uninstall  # Remove module (needs root)
+```
+
+When run from a terminal, uses `sudo`. When run from the shell (no terminal), uses `pkexec` with the Omarchy polkit popup.
+
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `theme-set` | Hook + CLI: reads accent hex and writes to acer_rgb sysfs |
 | `manifest.json` | Omarchy plugin manifest (bar widget) |
-| `Panel.qml` | Bar widget UI |
+| `Panel.qml` | Bar widget UI with install/uninstall toggle |
 | `Service.qml` | Plugin state, refresh, and apply logic |
+| `LedIndicator.qml` | LED status indicator component |
 | `Model.js` | Pure JS helpers: hex parsing |
+| `theme-set` | Hook + CLI: reads accent hex and writes to acer_rgb sysfs |
 | `bin/omarchy-install-predator-rgb` | Privileged install/uninstall with polkit support |
-| `install.sh` / `uninstall.sh` | User-space wrappers |
 | `kernel-module/src/acer_rgb.c` | Kernel module: WMI control of 4-zone keyboard + back logo |
+
+## Uninstall
+
+### 1. Uninstall the kernel module (optional)
+
+Click the Predator RGB icon in the bar → click **Uninstall Kernel Module**.
+
+### 2. Remove the plugin
+
+```sh
+omarchy plugin remove skvggor.predator-rgb
+```
 
 ## Development
 
 ```sh
 npm test                 # Model.js unit tests
 omarchy plugin validate . # manifest schema check
-```
-
-For linting (optional, development only):
-
-```sh
-npm install -g eslint @eslint/js
-eslint .
-```
-
-## Uninstall
-
-```sh
-./uninstall.sh           # removes module + hook + disables widget
-./uninstall.sh --purge   # also deletes the copied plugin files
 ```
 
 ## License
