@@ -52,8 +52,7 @@ Panel {
                 "available": led.available,
                 "applied": led.applied,
                 "themeName": led.themeName,
-                "accent": led.accent,
-                "backLogoEnabled": led.backLogoEnabled
+                "accent": led.accent
             });
         }
 
@@ -258,71 +257,6 @@ Panel {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "ON"
                             color: root.ledColor
-                            textFormat: Text.PlainText
-                            font.family: root.fontFamily
-                            font.pixelSize: Style.font.caption
-                            font.bold: true
-                            font.letterSpacing: 1.2
-                            font.capitalization: Font.AllUppercase
-                        }
-                    }
-                }
-
-                Item {
-                    width: parent.width
-                    height: Style.space(18)
-                    visible: led.available
-
-                    Text {
-                        id: logoIcon
-                        text: "󰖨"
-                        color: root.dim
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.icon
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    Text {
-                        id: logoLabel
-                        text: "Back logo"
-                        color: root.foreground
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.body
-                        anchors.left: logoIcon.right
-                        anchors.leftMargin: Style.space(8)
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    Rectangle {
-                        id: logoStatus
-                        height: Style.space(18)
-                        width: Style.space(7) + logoDot.width + Style.space(6) + Math.ceil(logoStatusLabel.implicitWidth) + Style.space(8)
-                        radius: height / 2
-                        color: led.backLogoEnabled ? Util.alpha(root.ledColor, 0.12) : Util.alpha(root.dim, 0.12)
-                        border.width: 1
-                        border.color: led.backLogoEnabled ? Util.alpha(root.ledColor, 0.35) : Util.alpha(root.dim, 0.35)
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        Rectangle {
-                            id: logoDot
-                            anchors.left: parent.left
-                            anchors.leftMargin: Style.space(7)
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Style.space(6)
-                            height: width
-                            radius: width / 2
-                            color: led.backLogoEnabled ? root.ledColor : root.dim
-                        }
-
-                        Text {
-                            id: logoStatusLabel
-                            anchors.left: logoDot.right
-                            anchors.leftMargin: Style.space(6)
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: led.backLogoEnabled ? "ON" : "OFF"
-                            color: led.backLogoEnabled ? root.ledColor : root.dim
                             textFormat: Text.PlainText
                             font.family: root.fontFamily
                             font.pixelSize: Style.font.caption

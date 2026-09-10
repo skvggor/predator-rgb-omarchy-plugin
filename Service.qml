@@ -14,7 +14,6 @@ Item {
     property string accent: ""
     property string lastError: ""
     property bool busy: applyProcess.running
-    property bool backLogoEnabled: boolSetting("backLogoEnabled", true)
     readonly property string acerRgbSysfs: "/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
     readonly property string backLogoSysfs: "/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
     // The theme-set hook ships beside this file (installed by install.sh) and is
@@ -40,13 +39,6 @@ Item {
         return number;
     }
 
-    function boolSetting(name, fallback) {
-        var value = setting(name, undefined);
-        if (value === undefined || value === null)
-            return fallback;
-        return value === true || value === "true" || value === 1;
-    }
-
     function refresh() {
         if (probeProcess.running)
             return ;
@@ -69,9 +61,6 @@ Item {
         if (applyProcess.running || !available)
             return ;
 
-        applyProcess.environment = [
-            "PREDATOR_RGB_BACK_LOGO=" + String(backLogoEnabled)
-        ];
         applyProcess.command = [hookPath];
         applyProcess.running = true;
     }

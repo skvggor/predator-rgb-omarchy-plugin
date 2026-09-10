@@ -13,17 +13,6 @@
     "description": "Show the keyboard LED status and apply the current theme accent color to keyboard and back logo.",
     "category": "Hardware",
     "allowMultiple": false,
-    "defaultSection": "right",
-    "defaults": {
-      "backLogoEnabled": true
-    },
-    "schema": [
-      {
-        "key": "backLogoEnabled",
-        "type": "boolean",
-        "label": "Enable back logo LED",
-        "defaultValue": true
-      }
-    ]
+    "defaultSection": "right"
   }
 }

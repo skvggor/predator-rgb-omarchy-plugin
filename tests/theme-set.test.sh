@@ -64,21 +64,20 @@ check_content "back logo red at 100% brightness enabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
   "FF0000,100,1"
 
-# --- Test 3: back logo disabled ---
+# --- Test 3: back logo always enabled ---
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
 printf '00FF00\n' > "$workdir/keyboard.rgb"
 PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
 ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
 BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BACK_LOGO=false \
 "$HOOK"
 check_content "green accent at 100% brightness" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
   "00FF00,00FF00,00FF00,00FF00,100"
-check_content "back logo disabled" \
+check_content "back logo always enabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-  "00FF00,100,0"
+  "00FF00,100,1"
 
 # --- Test 4: sysfs missing -> no error, no writes ---
 rm -rf "$workdir/sys"
@@ -112,29 +111,15 @@ else
   failures=$((failures + 1))
 fi
 
-# --- Test 6: back logo flag "1" accepted as enabled ---
+# --- Test 6: back logo always enabled regardless of env ---
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
 printf '0000FF\n' > "$workdir/keyboard.rgb"
 PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
 ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
 BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BACK_LOGO=1 \
 "$HOOK" >/dev/null 2>&1 || true
-check_content "back logo flag 1 treated as enabled" \
-  "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-  "0000FF,100,1"
-
-# --- Test 7: invalid back logo flag falls back to enabled (true) ---
-: > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
-: > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
-printf '0000FF\n' > "$workdir/keyboard.rgb"
-PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
-ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
-BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BACK_LOGO=banana \
-"$HOOK" >/dev/null 2>&1 || true
-check_content "invalid back logo flag falls back to enabled" \
+check_content "back logo always enabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
   "0000FF,100,1"
 

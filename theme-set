@@ -13,16 +13,6 @@ ACER_RGB_SYSFS="${ACER_RGB_SYSFS:-/sys/devices/platform/acer_rgb/four_zoned_kb/p
 BACK_LOGO_SYSFS="${BACK_LOGO_SYSFS:-/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo}"
 KEYBOARD_RGB_FILE="${PREDATOR_RGB_KEYBOARD_RGB_FILE:-$HOME/.local/state/omarchy/current/theme/keyboard.rgb}"
 BRIGHTNESS=100
-BACK_LOGO_ENABLED="${PREDATOR_RGB_BACK_LOGO:-true}"
-
-if [[ "$BACK_LOGO_ENABLED" == "true" || "$BACK_LOGO_ENABLED" == "1" ]]; then
-  BACK_LOGO_ENABLED="true"
-elif [[ "$BACK_LOGO_ENABLED" == "false" || "$BACK_LOGO_ENABLED" == "0" ]]; then
-  BACK_LOGO_ENABLED="false"
-else
-  echo "predator-rgb: invalid back logo flag \"$BACK_LOGO_ENABLED\", falling back to true" >&2
-  BACK_LOGO_ENABLED="true"
-fi
 
 validate_hex_color() {
   local hex=$1
@@ -45,13 +35,8 @@ apply_theme_color() {
   # Apply same color to all 4 zones at specified brightness
   echo "${hex},${hex},${hex},${hex},${BRIGHTNESS}" > "$ACER_RGB_SYSFS" 2>/dev/null
 
-  # Apply to back logo if enabled
-  if [[ "$BACK_LOGO_ENABLED" == "true" ]]; then
-    local enable=1
-    echo "${hex},${BRIGHTNESS},${enable}" > "$BACK_LOGO_SYSFS" 2>/dev/null
-  else
-    echo "${hex},${BRIGHTNESS},0" > "$BACK_LOGO_SYSFS" 2>/dev/null
-  fi
+  # Apply to back logo
+  echo "${hex},${BRIGHTNESS},1" > "$BACK_LOGO_SYSFS" 2>/dev/null
 }
 
 main() {

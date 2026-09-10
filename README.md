@@ -61,14 +61,6 @@ The keyboard LED now follows the active Omarchy theme automatically.
 
 Theme changes sync automatically. The bar icon opens a panel showing the current theme, accent color, and LED status.
 
-### Settings
-
-| Key | Type | Default | Meaning |
-|-----|------|---------|---------|
-| `backLogoEnabled` | boolean | `true` | Turn the rear lid logo on (colored like the keyboard) or off |
-
-Set via the shell settings UI.
-
 ## Files
 
 | File | Purpose |
