@@ -14,7 +14,6 @@ Item {
     property string accent: ""
     property string lastError: ""
     property bool busy: applyProcess.running
-    property int brightness: intSetting("brightness", Model.DEFAULT_BRIGHTNESS, 0, 100)
     property bool backLogoEnabled: boolSetting("backLogoEnabled", true)
     readonly property string acerRgbSysfs: "/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
     readonly property string backLogoSysfs: "/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
@@ -71,7 +70,6 @@ Item {
             return ;
 
         applyProcess.environment = [
-            "PREDATOR_RGB_BRIGHTNESS=" + String(brightness),
             "PREDATOR_RGB_BACK_LOGO=" + String(backLogoEnabled)
         ];
         applyProcess.command = [hookPath];

@@ -70,23 +70,6 @@ test('rgbPayload rejects out of range zones', () => {
   assert.deepEqual(Model.rgbPayload(NaN, rgb), [])
 })
 
-test('brightnessPayload sets byte 2 and the commit flag', () => {
-  const payload = Model.brightnessPayload(100)
-  assert.equal(payload.length, 16)
-  assert.equal(payload[2], 100)
-  assert.equal(payload[9], 1)
-  assert.equal(payload[0], 0)
-  assert.equal(payload[15], 0)
-})
-
-test('brightnessPayload clamps to 0..255', () => {
-  assert.equal(Model.brightnessPayload(999)[2], 255)
-  assert.equal(Model.brightnessPayload(-1)[2], 0)
-  assert.equal(Model.brightnessPayload('nope')[2], 0)
-  assert.equal(Model.brightnessPayload(NaN)[2], 0)
-  assert.equal(Model.brightnessPayload(Infinity)[2], 0)
-})
-
 test('defaultStatus returns expected shape', () => {
   const status = Model.defaultStatus()
   assert.equal(status.ok, true)
@@ -151,6 +134,5 @@ test('formatThemeName fallback', () => {
 })
 
 test('constants are exported', () => {
-  assert.equal(Model.DEFAULT_BRIGHTNESS, 100)
   assert.equal(Model.ZONE_COUNT, 4)
 })

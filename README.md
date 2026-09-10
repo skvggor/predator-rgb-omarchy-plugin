@@ -65,10 +65,9 @@ Theme changes sync automatically. The bar icon opens a panel showing the current
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
-| `brightness` | integer | `100` | Static LED brightness (0-100) |
 | `backLogoEnabled` | boolean | `true` | Turn the rear lid logo on (colored like the keyboard) or off |
 
-Set via `omarchy bar set skvggor.predator-rgb brightness 80` or the shell settings UI.
+Set via the shell settings UI.
 
 ## Install command
 

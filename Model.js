@@ -1,4 +1,3 @@
-const DEFAULT_BRIGHTNESS = 100
 const ZONE_COUNT = 4
 
 function parseAccentHex(raw) {
@@ -28,13 +27,6 @@ function rgbPayload(zone, rgb) {
   if (!isFinite(zoneNumber) || !rgb || zoneNumber < 1 || zoneNumber > ZONE_COUNT) return []
   const bitmask = 1 << (zoneNumber - 1)
   return [bitmask, clampByte(rgb.red), clampByte(rgb.green), clampByte(rgb.blue)]
-}
-
-function brightnessPayload(brightness) {
-  const payload = new Array(16).fill(0)
-  payload[2] = clampByte(brightness)
-  payload[9] = 1
-  return payload
 }
 
 function defaultStatus() {
@@ -74,13 +66,11 @@ function formatThemeName(raw) {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    DEFAULT_BRIGHTNESS,
     ZONE_COUNT,
     parseAccentHex,
     hexToRgb,
     clampByte,
     rgbPayload,
-    brightnessPayload,
     defaultStatus,
     parseStatus,
     formatThemeName

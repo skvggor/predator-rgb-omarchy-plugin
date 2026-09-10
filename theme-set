@@ -12,13 +12,8 @@ set -euo pipefail
 ACER_RGB_SYSFS="${ACER_RGB_SYSFS:-/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode}"
 BACK_LOGO_SYSFS="${BACK_LOGO_SYSFS:-/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo}"
 KEYBOARD_RGB_FILE="${PREDATOR_RGB_KEYBOARD_RGB_FILE:-$HOME/.local/state/omarchy/current/theme/keyboard.rgb}"
-BRIGHTNESS="${PREDATOR_RGB_BRIGHTNESS:-100}"
+BRIGHTNESS=100
 BACK_LOGO_ENABLED="${PREDATOR_RGB_BACK_LOGO:-true}"
-
-if [[ ! "$BRIGHTNESS" =~ ^[0-9]+$ ]] || (( BRIGHTNESS < 0 || BRIGHTNESS > 100 )); then
-  echo "predator-rgb: invalid brightness \"$BRIGHTNESS\", falling back to 100" >&2
-  BRIGHTNESS=100
-fi
 
 if [[ "$BACK_LOGO_ENABLED" == "true" || "$BACK_LOGO_ENABLED" == "1" ]]; then
   BACK_LOGO_ENABLED="true"

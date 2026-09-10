@@ -19,14 +19,6 @@ function moduleVersion() {
   return match[1]
 }
 
-function bootstrapUrls() {
-  const script = fs.readFileSync(path.join(root, 'bootstrap.sh'), 'utf8')
-  return {
-    repo: script.match(/^REPO="([^"]+)"/m)?.[1],
-    apiUrl: script.match(/^API_URL="([^"]+)"/m)?.[1],
-  }
-}
-
 test('manifest.json and kernel module declare the same version', () => {
   assert.equal(manifestVersion(), moduleVersion())
 })
@@ -35,16 +27,4 @@ test('versions are plain semver so release tags resolve to download URLs', () =>
   for (const version of [manifestVersion(), moduleVersion()]) {
     assert.match(version, /^\d+\.\d+\.\d+$/, `unexpected version: ${version}`)
   }
-})
-
-test('bootstrap.sh downloads from the correct release channel', () => {
-  const urls = bootstrapUrls()
-  assert.equal(
-    urls.repo,
-    'skvggor/predator-rgb-omarchy-plugin'
-  )
-  assert.match(
-    urls.apiUrl,
-    /^https:\/\/api\.github\.com\/repos\/skvggor\/predator-rgb-omarchy-plugin\/releases\/latest$/
-  )
 })

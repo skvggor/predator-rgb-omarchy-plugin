@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Integration test for the theme-set hook: runs it against fake acer_rgb sysfs
-# and verifies the exact format written (per_zone_mode: RRGGBB,RRGGBB,RRGGBB,RRGGBB,brightness)
-# and (back_logo: RRGGBB,brightness,enable).
+# and verifies the exact format written (per_zone_mode: RRGGBB,RRGGBB,RRGGBB,RRGGBB,100)
+# and (back_logo: RRGGBB,100,enable).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,7 +37,6 @@ printf '#819890\n' > "$workdir/keyboard.rgb"
 PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
 ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
 BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BRIGHTNESS=100 \
 PREDATOR_RGB_BACK_LOGO=true \
 "$HOOK"
 
@@ -49,22 +48,21 @@ check_content "back logo set to #819890 at 100% brightness enabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
   "819890,100,1"
 
-# --- Test 2: no hash tolerated, brightness custom ---
+# --- Test 2: no hash tolerated ---
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
 printf 'FF0000\n' > "$workdir/keyboard.rgb"
 PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
 ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
 BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BRIGHTNESS=50 \
 PREDATOR_RGB_BACK_LOGO=true \
 "$HOOK"
-check_content "red accent at 50% brightness" \
+check_content "red accent at 100% brightness" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
-  "FF0000,FF0000,FF0000,FF0000,50"
-check_content "back logo red at 50% brightness enabled" \
+  "FF0000,FF0000,FF0000,FF0000,100"
+check_content "back logo red at 100% brightness enabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-  "FF0000,50,1"
+  "FF0000,100,1"
 
 # --- Test 3: back logo disabled ---
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
@@ -73,15 +71,14 @@ printf '00FF00\n' > "$workdir/keyboard.rgb"
 PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
 ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
 BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BRIGHTNESS=75 \
 PREDATOR_RGB_BACK_LOGO=false \
 "$HOOK"
-check_content "green accent at 75% brightness" \
+check_content "green accent at 100% brightness" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
-  "00FF00,00FF00,00FF00,00FF00,75"
+  "00FF00,00FF00,00FF00,00FF00,100"
 check_content "back logo disabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-  "00FF00,75,0"
+  "00FF00,100,0"
 
 # --- Test 4: sysfs missing -> no error, no writes ---
 rm -rf "$workdir/sys"
@@ -115,61 +112,31 @@ else
   failures=$((failures + 1))
 fi
 
-# --- Test 6: out-of-range brightness falls back to 100 ---
+# --- Test 6: back logo flag "1" accepted as enabled ---
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
 printf '0000FF\n' > "$workdir/keyboard.rgb"
 PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
 ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
 BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BRIGHTNESS=150 \
-PREDATOR_RGB_BACK_LOGO=true \
-"$HOOK" >/dev/null 2>&1 || true
-check_content "brightness 150 clamped to 100" \
-  "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
-  "0000FF,0000FF,0000FF,0000FF,100"
-
-# --- Test 7: non-numeric brightness falls back to 100 ---
-: > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
-: > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
-PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
-ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
-BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BRIGHTNESS=abc \
-PREDATOR_RGB_BACK_LOGO=true \
-"$HOOK" >/dev/null 2>&1 || true
-check_content "non-numeric brightness falls back to 100" \
-  "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
-  "0000FF,0000FF,0000FF,0000FF,100"
-check_content "back logo still written on brightness fallback" \
-  "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-  "0000FF,100,1"
-
-# --- Test 8: back logo flag "1" accepted as enabled ---
-: > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
-: > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
-PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
-ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
-BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BRIGHTNESS=20 \
 PREDATOR_RGB_BACK_LOGO=1 \
 "$HOOK" >/dev/null 2>&1 || true
 check_content "back logo flag 1 treated as enabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-  "0000FF,20,1"
+  "0000FF,100,1"
 
-# --- Test 9: invalid back logo flag falls back to enabled (true) ---
+# --- Test 7: invalid back logo flag falls back to enabled (true) ---
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode"
 : > "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo"
+printf '0000FF\n' > "$workdir/keyboard.rgb"
 PREDATOR_RGB_KEYBOARD_RGB_FILE="$workdir/keyboard.rgb" \
 ACER_RGB_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode" \
 BACK_LOGO_SYSFS="$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-PREDATOR_RGB_BRIGHTNESS=20 \
 PREDATOR_RGB_BACK_LOGO=banana \
 "$HOOK" >/dev/null 2>&1 || true
 check_content "invalid back logo flag falls back to enabled" \
   "$workdir/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo" \
-  "0000FF,20,1"
+  "0000FF,100,1"
 
 echo
 if [[ $failures -gt 0 ]]; then
