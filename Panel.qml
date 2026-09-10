@@ -20,6 +20,10 @@ Panel {
     moduleName: "skvggor.predator-rgb"
     ipcTarget: "skvggor.predator-rgb"
     manageIpc: false
+
+    implicitWidth: button.implicitWidth
+    implicitHeight: button.implicitHeight
+
     onOpenedChanged: {
         if (opened) {
             led.refresh();
@@ -67,29 +71,6 @@ Panel {
             if (exitCode === 0) {
                 led.refresh();
             }
-        }
-    }
-
-    component LedIndicator: Rectangle {
-        id: indicator
-
-        required property color ledColor
-        property color borderColor: root.foreground
-        property int size: Style.space(12)
-
-        width: size
-        height: size
-        radius: size / 2
-        color: "transparent"
-        border.color: borderColor
-        border.width: 1
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: Style.space(2)
-            radius: Style.space(4)
-            visible: indicator.ledColor !== indicator.borderColor
-            color: indicator.ledColor
         }
     }
 
