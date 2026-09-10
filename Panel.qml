@@ -71,6 +71,17 @@ Panel {
         }
     }
 
+    Process {
+        id: uninstallProcess
+        running: false
+        command: ["pkexec", root.installScript, "--uninstall"]
+        onExited: function(exitCode) {
+            if (exitCode === 0) {
+                led.refresh();
+            }
+        }
+    }
+
     BarIconButton {
         id: button
 
@@ -318,6 +329,40 @@ Panel {
                             font.bold: true
                             font.letterSpacing: 1.2
                             font.capitalization: Font.AllUppercase
+                        }
+                    }
+                }
+
+                Item {
+                    width: parent.width
+                    height: Style.space(32)
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: uninstallLabel.implicitWidth + Style.space(32)
+                        height: Style.space(32)
+                        radius: Style.space(8)
+                        color: Util.alpha(Color.urgent, 0.15)
+                        border.width: 1
+                        border.color: Util.alpha(Color.urgent, 0.4)
+
+                        Text {
+                            id: uninstallLabel
+                            anchors.centerIn: parent
+                            text: uninstallProcess.running ? "Uninstalling..." : "Uninstall Kernel Module"
+                            color: Color.urgent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (!uninstallProcess.running)
+                                    uninstallProcess.running = true;
+                            }
                         }
                     }
                 }
