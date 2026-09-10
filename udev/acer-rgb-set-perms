@@ -1,0 +1,12 @@
+#!/bin/sh
+# Set sysfs permissions for acer_rgb so group members can write LED colors.
+# Called by udev when the acer_rgb platform device appears.
+SYSFS_DIR="/sys/devices/platform/acer_rgb/four_zoned_kb"
+[ -d "$SYSFS_DIR" ] || exit 0
+
+# Create acer_rgb group if it doesn't exist (ignore if already exists)
+getent group acer_rgb >/dev/null 2>&1 || groupadd acer_rgb 2>/dev/null || true
+
+# Set group ownership and permissions (0660 = rw for owner and group)
+chgrp acer_rgb "$SYSFS_DIR"/* 2>/dev/null
+chmod 0660 "$SYSFS_DIR"/* 2>/dev/null

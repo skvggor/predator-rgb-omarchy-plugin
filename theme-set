@@ -1,0 +1,52 @@
+#!/bin/bash
+# omarchy:summary=Apply the current Omarchy theme accent color to the Acer Predator RGB keyboard and back logo
+#
+# Reads the theme accent color (keyboard.rgb) that Omarchy writes on every theme
+# change and applies it as a static color at 100% brightness. Runs as a
+# theme-set.d hook, but can also be invoked directly.
+#
+# REQUIRES: acer_rgb kernel module (included in this plugin)
+
+set -euo pipefail
+
+ACER_RGB_SYSFS="${ACER_RGB_SYSFS:-/sys/devices/platform/acer_rgb/four_zoned_kb/per_zone_mode}"
+BACK_LOGO_SYSFS="${BACK_LOGO_SYSFS:-/sys/devices/platform/acer_rgb/four_zoned_kb/back_logo}"
+KEYBOARD_RGB_FILE="${PREDATOR_RGB_KEYBOARD_RGB_FILE:-$HOME/.local/state/omarchy/current/theme/keyboard.rgb}"
+BRIGHTNESS=100
+
+validate_hex_color() {
+  local hex=$1
+  [[ $hex =~ ^[0-9A-Fa-f]{6}$ ]]
+}
+
+read_accent_hex() {
+  local content
+  content=$(sed 's/^[[:space:]]*#\?//; s/[[:space:]]*$//' "$KEYBOARD_RGB_FILE")
+  if validate_hex_color "$content"; then
+    printf "%s" "$content"
+  fi
+}
+
+apply_theme_color() {
+  local hex
+  hex=$(read_accent_hex)
+  [[ -n $hex ]] || return 0
+
+  # Apply same color to all 4 zones at specified brightness
+  echo "${hex},${hex},${hex},${hex},${BRIGHTNESS}" > "$ACER_RGB_SYSFS" 2>/dev/null
+
+  # Apply to back logo
+  echo "${hex},${BRIGHTNESS},1" > "$BACK_LOGO_SYSFS" 2>/dev/null
+}
+
+main() {
+  local sysfs_dir
+  sysfs_dir=$(dirname "$ACER_RGB_SYSFS")
+  [[ -d "$sysfs_dir" ]] || exit 0
+  [[ -w $ACER_RGB_SYSFS ]] || exit 0
+  [[ -r $KEYBOARD_RGB_FILE ]] || exit 0
+  apply_theme_color
+  omarchy-shell -q skvggor.predator-rgb refresh 2>/dev/null || true
+}
+
+main

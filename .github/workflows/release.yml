@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "ERROR: tag must be on main branch" >&2
+            exit 1
+          fi
+
+      - name: Verify versions match tag
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(jq -r .version manifest.json)"
+          module_version="$(grep -oP 'MODULE_VERSION\("\K[^"]+' kernel-module/src/acer_rgb.c)"
+
+          echo "Tag: $tag_version"
+          echo "Manifest: $manifest_version"
+          echo "Module: $module_version"
+
+          if [[ "$tag_version" != "$manifest_version" ]]; then
+            echo "ERROR: tag ($tag_version) != manifest ($manifest_version)" >&2
+            exit 1
+          fi
+          if [[ "$tag_version" != "$module_version" ]]; then
+            echo "ERROR: tag ($tag_version) != module ($module_version)" >&2
+            exit 1
+          fi
+          echo "Versions match: $tag_version"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+
+      - name: Run tests
+        run: node --test tests/*.test.js
+
+      - name: Run shell integration tests
+        run: bash tests/theme-set.test.sh
+
+      - name: Install kernel headers
+        run: sudo apt-get update && sudo apt-get install -y linux-headers-$(uname -r)
+
+      - name: Build kernel module
+        run: cd kernel-module && make
+
+      - name: Verify module was built
+        run: test -f kernel-module/acer_rgb.ko
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "${{ github.repository }}" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
