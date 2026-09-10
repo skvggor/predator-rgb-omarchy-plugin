@@ -55,13 +55,7 @@ omarchy plugin add git@github.com:skvggor/predator-rgb-omarchy-plugin.git --enab
 
 Click the Predator RGB icon in the bar → click **Install Kernel Module**. A polkit popup will ask for your password.
 
-### 3. Install the theme-set hook
-
-```sh
-ln -sf ~/.config/omarchy/plugins/skvggor.predator-rgb/theme-set ~/.config/omarchy/hooks/theme-set.d/omarchy-predator-rgb
-```
-
-This ensures the keyboard color updates automatically when you switch themes.
+The keyboard LED now follows the active Omarchy theme automatically.
 
 ## Usage
 
