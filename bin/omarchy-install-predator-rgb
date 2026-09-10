@@ -88,6 +88,8 @@ do_install() {
 }
 
 do_uninstall() {
+  modprobe -r acer_rgb 2>/dev/null || true
+
   if [[ -d "$MODULE_DIR" ]]; then
     cd "$MODULE_DIR"
     make uninstall 2>/dev/null || true
@@ -97,7 +99,6 @@ do_uninstall() {
   rm -f /etc/udev/rules.d/90-acer-rgb.rules
   rm -f /usr/libexec/acer-rgb-set-perms
   udevadm control --reload-rules 2>/dev/null || true
-  modprobe -r acer_rgb 2>/dev/null || true
   depmod -a 2>/dev/null || true
 
   echo "Kernel module and udev rules removed."
