@@ -4,7 +4,7 @@
 
 [![Demo Video](https://img.youtube.com/vi/nR_2H0sh1xg/0.jpg)](https://youtube.com/shorts/nR_2H0sh1xg)
 
-An Omarchy plugin that keeps the **Acer Predator Helios Neo 16** keyboard backlight and rear lid logo in sync with the active Omarchy theme. Every time you switch themes, the LEDs switch to the theme's **accent color** at **100% brightness** (configurable).
+An Omarchy plugin that keeps the **Acer Predator Helios Neo 16** keyboard backlight and rear lid logo in sync with the active Omarchy theme. Every time you switch themes, the LEDs switch to the theme's **accent color** at 100% brightness.
 
 ## How it works
 
@@ -69,18 +69,6 @@ Theme changes sync automatically. The bar icon opens a panel showing the current
 
 Set via the shell settings UI.
 
-## Install command
-
-The `bin/omarchy-install-predator-rgb` command follows the Omarchy dual-path pattern:
-
-```sh
-bin/omarchy-install-predator-rgb --check      # Verify kernel headers (no root)
-bin/omarchy-install-predator-rgb --install    # Build + install module (needs root)
-bin/omarchy-install-predator-rgb --uninstall  # Remove module (needs root)
-```
-
-When run from a terminal, uses `sudo`. When run from the shell (no terminal), uses `pkexec` with the Omarchy polkit popup.
-
 ## Files
 
 | File | Purpose |
@@ -90,8 +78,7 @@ When run from a terminal, uses `sudo`. When run from the shell (no terminal), us
 | `Service.qml` | Plugin state, refresh, and apply logic |
 | `LedIndicator.qml` | LED status indicator component |
 | `Model.js` | Pure JS helpers: hex parsing |
-| `theme-set` | Hook + CLI: reads accent hex and writes to acer_rgb sysfs |
-| `bin/omarchy-install-predator-rgb` | Privileged install/uninstall with polkit support |
+| `theme-set` | Reads accent hex and writes to acer_rgb sysfs |
 | `kernel-module/src/acer_rgb.c` | Kernel module: WMI control of 4-zone keyboard + back logo |
 
 ## Uninstall
