@@ -35,7 +35,7 @@ omarchy plugin add git@github.com:skvggor/predator-rgb-omarchy-plugin.git --enab
 
 Open the panel from the bar icon and click to copy the install command:
 
-![Install command](./assets/install-kernel-module.png)
+![Install command](./install-kernel-module.png)
 
 Then run it in your terminal:
 
