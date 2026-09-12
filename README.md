@@ -1,6 +1,6 @@
 # Predator RGB · Omarchy
 
-![Acer Predator Helios Neo 16 keyboard backlight](./assets/preview.png)
+![Acer Predator Helios Neo 16 keyboard backlight](./preview.png)
 
 [![Demo Video](https://img.youtube.com/vi/nR_2H0sh1xg/0.jpg)](https://youtube.com/shorts/nR_2H0sh1xg)
 
