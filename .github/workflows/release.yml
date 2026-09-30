@@ -58,10 +58,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y linux-headers-$(uname -r)
 
       - name: Build kernel module
-        run: cd kernel-module && make
+        # The build directory is passed explicitly so the artefact lands at a
+        # known path; the Makefile default is a random mktemp directory, which is
+        # what the installer relies on. The kernel build system does not quote
+        # M=, so this must be a path without spaces, which the runner path is.
+        run: make -C kernel-module BUILD_DIR="$PWD/kernel-module/build"
 
       - name: Verify module was built
-        run: test -f kernel-module/acer_rgb.ko
+        run: test -f kernel-module/build/src/acer_rgb.ko
 
       - name: Publish release
         env:

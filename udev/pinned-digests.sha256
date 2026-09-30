@@ -1,0 +1,17 @@
+# Digests of the udev files, in version control.
+#
+# The helper runs as root on every hotplug of the platform device, and the rule
+# that invokes it is itself installed as root, so these are the two files where
+# a version-controlled pin is possible and worth enforcing. They do not depend
+# on the kernel version, unlike the module.
+#
+# This closes the window in which another process running as your user could
+# replace either file between the moment you decided to install and the moment
+# root copied it. It does not, and cannot, defend against a checkout you have
+# edited yourself: the plugin directory is yours, so whoever can change the file
+# can change this line too. See SECURITY.md.
+#
+# After editing either file, regenerate with:
+#   cd udev && sha256sum 90-acer-rgb.rules acer-rgb-set-perms > pinned-digests.sha256
+6d96d90724328353501404bdec51645151ab45deebe2c9583d105a676910fc13  90-acer-rgb.rules
+7db1b44932d99caf000fd981fa43b05454eaab37342d534b5923e7f4a95f9378  acer-rgb-set-perms

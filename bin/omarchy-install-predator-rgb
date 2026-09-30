@@ -13,89 +13,266 @@ SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SO
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$SCRIPT_DIR/../kernel-module"
 UDEV_DIR="$SCRIPT_DIR/../udev"
+KERNEL_RELEASE="$(uname -r)"
+MODULE_DEST="/lib/modules/$KERNEL_RELEASE/extra/acer_rgb.ko"
+PINNED_DIGESTS_FILE="$UDEV_DIR/pinned-digests.sha256"
 SYSFS_DIR="/sys/devices/platform/acer_rgb/four_zoned_kb"
+GROUP_NAME="acer_rgb"
+HELPER_DEST="/usr/libexec/acer-rgb-set-perms"
+RULES_DEST="/etc/udev/rules.d/90-acer-rgb.rules"
+# Prefix for the private directories root stages copies in. mktemp -d appends
+# its own random suffix, so the result is an unpredictable directory directly
+# under /run, which root owns and no other user can write. That is what makes a
+# staged copy impossible to replace after its digest has been checked.
+STAGING_PREFIX="/run/predator-rgb-install"
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
 
 usage() {
   echo "Usage: $(basename "$0") [--check|--install|--uninstall|--load|--unload]" >&2
   exit 1
 }
 
+# The user who asked for this install. sudo sets SUDO_USER; pkexec does not, but
+# it does set PKEXEC_UID. Without either there is no unprivileged account to
+# build as, and building as root is exactly what this script refuses to do.
+invoking_user() {
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    printf "%s\n" "$SUDO_USER"
+    return 0
+  fi
+  if [[ -n "${PKEXEC_UID:-}" ]] && [[ "$PKEXEC_UID" != "0" ]]; then
+    getent passwd "$PKEXEC_UID" | cut -d: -f1
+    return 0
+  fi
+  return 1
+}
+
 check_headers() {
-  local kernel_release
-  kernel_release="$(uname -r)"
-  [[ -d "/usr/lib/modules/$kernel_release/build" ]] || [[ -d "/lib/modules/$kernel_release/build" ]]
+  [[ -d "/usr/lib/modules/$KERNEL_RELEASE/build" ]] || [[ -d "/lib/modules/$KERNEL_RELEASE/build" ]]
+}
+
+check_udev_digests() {
+  [[ -f "$PINNED_DIGESTS_FILE" ]] || fail "pinned digests missing at $PINNED_DIGESTS_FILE"
+  ( cd "$UDEV_DIR" && sha256sum --check --strict --status "$PINNED_DIGESTS_FILE" ) \
+    || fail "udev files do not match the digests pinned in $PINNED_DIGESTS_FILE; refusing to install"
+}
+
+# Compile the module as the invoking user, in a directory only they can reach.
+#
+# The build must not be privileged. The Makefile is in the plugin directory, which
+# the user owns, and make executes recipes: running it as root would execute
+# whatever that file says, which is not what "install my keyboard module" asks
+# for. Building unprivileged also keeps the module owned by the user, so root
+# only ever reads a finished artefact instead of producing one.
+build_module() {
+  local user="$1"
+  command -v make >/dev/null 2>&1 || fail "make is required to build the kernel module"
+  command -v rsync >/dev/null 2>&1 || fail "rsync is required to build the kernel module"
+
+  sudo -u "$user" -- bash -c '
+    set -euo pipefail
+    module_dir="$1"
+    build_dir="$(mktemp -d "${TMPDIR:-/tmp}/acer-rgb-build.XXXXXXXX")"
+    make -C "$module_dir" BUILD_DIR="$build_dir" >/dev/null
+    module="$build_dir/src/acer_rgb.ko"
+    [ -f "$module" ] || { echo "ERROR: the build produced no acer_rgb.ko" >&2; exit 1; }
+    printf "%s\n" "$module"
+  ' bash "$MODULE_DIR"
+}
+
+# The one privileged step. It copies what it is given into a private root-owned
+# directory, checks the digest of the copy rather than of the source, and installs
+# from the copy. The source paths all sit in the plugin directory, which the user
+# owns, so anything checked outside this step is advisory: between the check and
+# the copy another process running as that user can unlink and recreate the file.
+# Inside a single root process that window does not exist, because the staged copy
+# is 0700 and root-owned and the install reads the copy, not the source.
+install_as_root() {
+  local module_path="$1"
+
+  run_as_root bash -c '
+    set -euo pipefail
+    module_path="$1"
+    module_dest="$2"
+    staging_prefix="$3"
+    udev_dir="$4"
+    helper_dest="$5"
+    rules_dest="$6"
+    digest_file="$7"
+
+    staging="$(mktemp -d "$staging_prefix.XXXXXX")"
+    trap "rm -rf -- \"$staging\"" EXIT
+
+    staged_module="$staging/acer_rgb.ko"
+    staged_helper="$staging/acer-rgb-set-perms"
+    staged_rules="$staging/90-acer-rgb.rules"
+
+    install -m 0600 -o root -g root -T "$module_path" "$staged_module"
+    install -m 0600 -o root -g root -T "$udev_dir/acer-rgb-set-perms" "$staged_helper"
+    install -m 0600 -o root -g root -T "$udev_dir/90-acer-rgb.rules" "$staged_rules"
+
+    # The two udev files are pinned in version control, so this comparison is
+    # against a value the caller did not choose.
+    ( cd "$staging" && sha256sum --check --strict --status \
+        <(grep -E "^[0-9a-f]{64} +(acer-rgb-set-perms|90-acer-rgb\\.rules)\$" "$digest_file") ) \
+      || { echo "ERROR: the staged udev files do not match the pinned digests" >&2; exit 1; }
+
+    mkdir -p "$(dirname "$module_dest")"
+    install -m 0644 -o root -g root -T "$staged_module" "$module_dest"
+    install -m 0755 -o root -g root -T "$staged_helper" "$helper_dest"
+    install -m 0644 -o root -g root -T "$staged_rules" "$rules_dest"
+
+    # Re-read the digests that landed, as a check on the destination rather than
+    # on the source. The module is not compared against a pinned value: it was
+    # built from your own checkout and there is no portable artifact to pin it to,
+    # since the kernel refuses a module built for another kernel. Reporting it is
+    # the point, so --check can tell you what is loaded.
+    ( cd "$(dirname "$module_dest")" && sha256sum --status -c <(echo "$(sha256sum "$staged_module" | cut -d" " -f1)  $(basename "$module_dest")") ) \
+      || { rm -f -- "$module_dest"; echo "ERROR: installed module does not match the staged copy" >&2; exit 1; }
+
+    depmod -a
+  ' bash "$module_path" "$MODULE_DEST" "$STAGING_PREFIX" "$UDEV_DIR" \
+    "$HELPER_DEST" "$RULES_DEST" "$PINNED_DIGESTS_FILE"
+}
+
+record_installed_digest() {
+  local digest state_dir="/var/lib/predator-rgb"
+  digest="$(sha256sum "$MODULE_DEST" | cut -d' ' -f1)"
+  mkdir -p "$state_dir"
+  # The digest of what entered the kernel, kept so --check can report it and so a
+  # later reinstall is visibly different.
+  printf '%s  %s\n' "$digest" "acer_rgb.ko" > "$state_dir/installed-module.sha256"
+  chmod 0644 "$state_dir/installed-module.sha256"
 }
 
 do_install() {
-  if [[ ! -d "$MODULE_DIR" ]]; then
-    echo "ERROR: Kernel module source not found at $MODULE_DIR" >&2
-    exit 1
-  fi
+  local user
+  user="$(invoking_user)" || fail "cannot tell which user to build as (need sudo or pkexec, not a root shell)"
 
-  if ! check_headers; then
-    echo "ERROR: Kernel headers not found for $(uname -r)" >&2
-    echo "Install: sudo pacman -S linux-headers" >&2
-    exit 1
-  fi
+  [[ -d "$MODULE_DIR" ]] || fail "Kernel module source not found at $MODULE_DIR"
+  check_headers || fail "Kernel headers not found for $KERNEL_RELEASE (sudo pacman -S linux-headers)"
 
-  echo "Building and installing kernel module..."
+  check_udev_digests
 
-  cd "$MODULE_DIR"
-  make install
+  echo "Building the kernel module as $user..."
+  local module_path
+  module_path="$(build_module "$user")"
 
-  depmod -a
+  echo "Installing the kernel module..."
+  install_as_root "$module_path"
+  rm -f "$module_path"
 
-  echo "acer_rgb" > /etc/modules-load.d/acer_rgb.conf
+  printf 'acer_rgb\n' > /etc/modules-load.d/acer_rgb.conf
+  record_installed_digest
+
+  getent group "$GROUP_NAME" >/dev/null 2>&1 || groupadd "$GROUP_NAME"
 
   modprobe -r acer_rgb 2>/dev/null || true
   modprobe acer_rgb
 
-  if ! getent group acer_rgb >/dev/null 2>&1; then
-    groupadd acer_rgb
-  fi
-
-  if [[ -n "${SUDO_USER:-}" ]]; then
-    usermod -aG acer_rgb "$SUDO_USER"
-  fi
-
-  echo "Installing udev rule..."
-  cp "$UDEV_DIR/90-acer-rgb.rules" /etc/udev/rules.d/90-acer-rgb.rules
-  mkdir -p /usr/libexec
-  cp "$UDEV_DIR/acer-rgb-set-perms" /usr/libexec/acer-rgb-set-perms
-  chmod 755 /usr/libexec/acer-rgb-set-perms
   udevadm control --reload-rules
   udevadm trigger --subsystem-match=platform --attr-match=driver=acer_rgb
 
   if [[ -d "$SYSFS_DIR" ]]; then
-    chgrp acer_rgb "$SYSFS_DIR"/* 2>/dev/null || true
+    chgrp "$GROUP_NAME" "$SYSFS_DIR"/* 2>/dev/null || true
     chmod 0660 "$SYSFS_DIR"/* 2>/dev/null || true
   fi
 
-  echo "Kernel module installed and loaded."
-
-  if [[ -n "${SUDO_USER:-}" ]]; then
-    sudo -u "$SUDO_USER" env OMARCHY_PATH=/usr/share/omarchy /usr/bin/omarchy restart shell 2>&1 || true
+  if id -nG "$user" | tr ' ' '\n' | grep -qx "$GROUP_NAME"; then
+    echo "User $user is already in the $GROUP_NAME group"
+  else
+    usermod -aG "$GROUP_NAME" "$user"
+    echo "Added $user to the $GROUP_NAME group; log out and back in for it to take effect"
   fi
+
+  echo "Kernel module installed and loaded."
+  restart_shell "$user"
 }
 
 do_uninstall() {
+  local user=""
+  user="$(invoking_user)" || true
+
   modprobe -r acer_rgb 2>/dev/null || true
 
-  if [[ -d "$MODULE_DIR" ]]; then
-    cd "$MODULE_DIR"
-    make uninstall 2>/dev/null || true
-  fi
-
+  rm -f "$MODULE_DEST"
   rm -f /etc/modules-load.d/acer_rgb.conf
-  rm -f /etc/udev/rules.d/90-acer-rgb.rules
-  rm -f /usr/libexec/acer-rgb-set-perms
+  rm -f "$HELPER_DEST"
+  rm -f "$RULES_DEST"
+  rm -rf /var/lib/predator-rgb
   udevadm control --reload-rules 2>/dev/null || true
   depmod -a 2>/dev/null || true
 
-  echo "Kernel module and udev rules removed."
+  # Membership in the group existed only so the theme hook could write the sysfs
+  # attributes. Leaving it behind would keep a group whose purpose is gone.
+  if [[ -n "$user" ]] && getent group "$GROUP_NAME" >/dev/null 2>&1; then
+    if id -nG "$user" | tr ' ' '\n' | grep -qx "$GROUP_NAME"; then
+      gpasswd -d "$user" "$GROUP_NAME" >/dev/null 2>&1 \
+        || echo "WARNING: could not remove $user from $GROUP_NAME; run: sudo gpasswd -d $user $GROUP_NAME" >&2
+      echo "Removed $user from the $GROUP_NAME group (log out and back in)"
+    fi
+    if [[ -z "$(getent group "$GROUP_NAME" | cut -d: -f4)" ]]; then
+      groupdel "$GROUP_NAME" 2>/dev/null || true
+    fi
+  fi
 
-  if [[ -n "${SUDO_USER:-}" ]]; then
-    sudo -u "$SUDO_USER" env OMARCHY_PATH=/usr/share/omarchy /usr/bin/omarchy restart shell 2>&1 || true
+  echo "Kernel module and udev rules removed."
+  [[ -n "$user" ]] && restart_shell "$user"
+  return 0
+}
+
+restart_shell() {
+  local user="$1"
+  [[ -n "$user" ]] || return 0
+  command -v omarchy >/dev/null 2>&1 || return 0
+  sudo -u "$user" -- env OMARCHY_PATH=/usr/share/omarchy omarchy restart shell 2>&1 || true
+}
+
+do_check() {
+  if [[ -d "/usr/lib/modules/$KERNEL_RELEASE/build" ]] || [[ -d "/lib/modules/$KERNEL_RELEASE/build" ]]; then
+    echo "Kernel headers found for $KERNEL_RELEASE"
+  else
+    echo "Kernel headers NOT found for $KERNEL_RELEASE" >&2
+  fi
+
+  if [[ -f "$MODULE_DEST" ]]; then
+    echo "Module installed: $MODULE_DEST"
+    echo "  sha256: $(sha256sum "$MODULE_DEST" | cut -d' ' -f1)"
+    if [[ -f /var/lib/predator-rgb/installed-module.sha256 ]]; then
+      echo "  at install: $(cut -d' ' -f1 < /var/lib/predator-rgb/installed-module.sha256)"
+    fi
+  else
+    echo "Module NOT installed for $KERNEL_RELEASE"
+  fi
+
+  if [[ -d /sys/module/acer_rgb ]]; then
+    echo "Module loaded: yes"
+  else
+    echo "Module loaded: no"
+  fi
+
+  if [[ -w "$SYSFS_DIR/per_zone_mode" ]]; then
+    echo "Sysfs writable by $(id -un): yes"
+  else
+    echo "Sysfs writable by $(id -un): no (log out and back in if you just joined $GROUP_NAME)"
+  fi
+
+  check_udev_digests && echo "udev files match the pinned digests"
+}
+
+run_as_root() {
+  if (( EUID == 0 )); then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  elif command -v pkexec >/dev/null 2>&1; then
+    pkexec "$@"
+  else
+    fail "need root (no sudo or pkexec available)"
   fi
 }
 
@@ -111,12 +288,7 @@ require_root() {
 
 case "${1:-}" in
   --check)
-    if check_headers; then
-      echo "Kernel headers found for $(uname -r)"
-    else
-      echo "Kernel headers NOT found for $(uname -r)" >&2
-      exit 1
-    fi
+    do_check
     ;;
   --install)
     require_root "$@"

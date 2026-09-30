@@ -40,9 +40,17 @@ it directly:
 cd ~/.config/omarchy/plugins/skvggor.predator-rgb && sudo ./bin/omarchy-install-predator-rgb --install
 ```
 
-You will be asked for your password. The script builds and installs the `acer_rgb` kernel module, loads it, sets up udev rules, and restarts the shell automatically.
+You will be asked for your password. The script compiles the module **as your
+user, unprivileged**, then installs the resulting `.ko`, the udev rule and the
+udev helper from copies root has verified, loads the module, adds you to the
+`acer_rgb` group and restarts the shell.
 
-The keyboard LED now follows the active Omarchy theme automatically.
+Log out and back in once so the group membership takes effect. The keyboard LED
+then follows the active Omarchy theme automatically.
+
+This plugin loads a kernel module: your own C code, running in kernel space.
+Read [Security](SECURITY.md) before installing. `./bin/omarchy-install-predator-rgb --check`
+reports the installed module, its digest, and whether it is loaded.
 
 ## Usage
 
@@ -69,8 +77,8 @@ Run from the plugin directory (`~/.config/omarchy/plugins/skvggor.predator-rgb`)
 
 | Command | Description |
 |---------|-------------|
-| `sudo ./bin/omarchy-install-predator-rgb --install` | Build, install, and load the kernel module |
-| `sudo ./bin/omarchy-install-predator-rgb --uninstall` | Unload and remove the kernel module |
+| `sudo ./bin/omarchy-install-predator-rgb --install` | Build unprivileged, then install and load the module |
+| `sudo ./bin/omarchy-install-predator-rgb --uninstall` | Unload and remove the module, and revoke the group membership |
 | `sudo ./bin/omarchy-install-predator-rgb --load` | Load the kernel module (if already installed) |
 | `sudo ./bin/omarchy-install-predator-rgb --unload` | Unload the kernel module (keeps it installed) |
 | `./bin/omarchy-install-predator-rgb --check` | Check if kernel headers are available |
@@ -88,13 +96,29 @@ Run from the plugin directory (`~/.config/omarchy/plugins/skvggor.predator-rgb`)
 | `theme-set` | Reads accent hex and writes to acer_rgb sysfs |
 | `bin/omarchy-install-predator-rgb` | Kernel module install/uninstall script |
 | `kernel-module/src/acer_rgb.c` | Kernel module: WMI control of 4-zone keyboard + back logo |
+| `kernel-module/Makefile` | Compiles only; it writes no system path |
+| `udev/90-acer-rgb.rules` | udev rule that sets sysfs permissions on hotplug |
+| `udev/acer-rgb-set-perms` | udev helper, runs as root |
+| `udev/pinned-digests.sha256` | Digests of the two udev files, checked before install |
 
 ## Development
 
 ```sh
-npm test                 # Model.js unit tests
-omarchy plugin validate . # manifest schema check
+npm test                 # Model.js, installer and version tests
+bash tests/theme-set.test.sh  # theme hook integration checks
+omarchy plugin validate .     # manifest schema check
 ```
+
+Building the module by hand uses a random temporary build directory:
+
+```sh
+make -C kernel-module            # leaves acer_rgb.ko in a mktemp directory
+make -C kernel-module BUILD_DIR=/tmp/acer-build   # or choose one yourself
+```
+
+`BUILD_DIR` must not contain spaces: the kernel build system re-invokes `make`
+with `M=$(M)` unquoted, so a checkout under a path like `~/Dropbox/Linux Files/`
+cannot build in place.
 
 ## License
 
